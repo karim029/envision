@@ -3,7 +3,7 @@
 ## Project Overview & Greenfield Status
 Multi-tenant B2B SaaS platform for training HR interviewers (English MVP). The HR user uploads a Job Description (JD) and Candidate CV; a real-time Voice AI agent acts as the candidate during a live mock interview. Post-call, an evaluation engine grades the HR interviewer's questioning technique (depth, bias avoidance, STAR probing, JD alignment) and assigns an HR Interviewer Level (Junior, Mid, Senior, Lead).
 
-- **Commercial Stage:** Invite-only free HR validation MVP ($0 infrastructure stack; `planTier = DEMO` with 30 free minutes, gated by `INVITE_CODE`). Architecture must support future paid `PRO` tenants without schema rewrites.
+- **Commercial Stage:** Invite-only free HR validation MVP ($0 infrastructure stack; `planTier = DEMO` with 30 free minutes, gated by single-use invite links (`Invite` table, hashed tokens, created by the owner with `npm run invite:create`)). Architecture must support future paid `PRO` tenants without schema rewrites.
 - **Product & Backlog Reference:** Always check `docs/PRODUCT_ROADMAP.md` before proposing features. Never build Phase 2 backlog items during MVP.
 - **Build Approach (From Scratch):** Greenfield repo built incrementally in small, clean slices. Never assume boilerplate exists. Always check the **Build Roadmap (Chunks 0–6)** below before starting work so we build in strict dependency order.
 - **Beta feedback:** Collected verbally in meetings with testers — no in-app feedback feature or table during MVP.
@@ -32,8 +32,8 @@ Use this roadmap so you never get lost on what to build next. You can use 1 bran
 - **Done Gate:** Pushing a branch runs `tsc`, `lint`, `test:unit`, and `build` cleanly in GitHub Actions; `/api/health` responds on the Vercel preview URL.
 
 ### Chunk 1: Database Schema, Migrations & Tenant Onboarding
-- **Goal:** Prisma v7 config (`DATABASE_URL` + `DIRECT_URL`), initial SQL migration (`Tenant`, `User`, `InterviewSession`, `HrEvaluation`), Supabase Auth (`/auth/callback`, login/signup with `INVITE_CODE`, password reset), `requireAuthContext()`, and atomic `onboardingService`. Extend CI with `test:integration` (ephemeral Postgres + `prisma migrate deploy`); add `deploy.yml` (migrations on push to `main`) and Supabase `keep-alive.yml`.
-- **Done Gate:** Integration test proves signing up with a valid `INVITE_CODE` creates a `DEMO` tenant with `30` minutes and an `ADMIN` user, and invalid codes are rejected.
+- **Goal:** Prisma v7 config (`DATABASE_URL` + `DIRECT_URL`), initial SQL migration (`Tenant`, `User`, `InterviewSession`, `HrEvaluation`) plus `Invite`, Supabase Auth (`/auth/callback`, login/signup via single-use invite link, password reset), `requireAuthContext()`, and atomic `onboardingService`. Extend CI with `test:integration` (ephemeral Postgres + `prisma migrate deploy`); add `deploy.yml` (migrations on push to `main`) and Supabase `keep-alive.yml`.
+- **Done Gate:** Integration test proves signing up with a valid invite link creates a `DEMO` tenant with `30` minutes and an `ADMIN` user and marks the invite used, and unknown, used, or expired invites are rejected (including two simultaneous signups on one invite: exactly one succeeds).
 
 ### Chunk 2: Atomic Billing & Finalize-Once Session Logic
 - **Goal:** `billingService` handling atomic minute deduction (`minutesBalance >= cost`) and session state transitions (`PENDING -> IN_PROGRESS -> COMPLETED -> GRADED | GRADING_FAILED`). Duplicate finalize calls are made harmless by the state machine itself: the `IN_PROGRESS -> COMPLETED` conditional `updateMany` matches 0 rows on a repeat, so minutes are not deducted again.
@@ -119,9 +119,13 @@ Keep core domain logic decoupled from Next.js routing and the LiveKit worker:
 - Every tenant-owned table (`User`, `InterviewSession`, `HrEvaluation`) MUST have `tenantId` indexed via `@@index([tenantId])`.
 - NEVER call `prisma` directly in UI pages, Server Actions, or Route Handlers—always route through `src/server/services/*` requiring an explicit `tenantId`.
 - Resolve `tenantId` exclusively via `requireAuthContext()` on the server; never trust client-supplied `tenantId`.
+- **Platform-level tables** (currently only `Invite`) have no `tenantId` because they exist before any tenant. They are written only by owner tooling (`scripts/`, a future owner admin) and by `onboardTenant`—never readable or writable by tenants.
+- **Every new table gets RLS:** each migration that creates a table must add `ALTER TABLE "<Table>" ENABLE ROW LEVEL SECURITY;` by hand (`migrate dev --create-only`, edit, apply). `tests/integration/rls.test.ts` fails if one is missed.
+- **Owner ≠ tenant `ADMIN`:** tenant `ADMIN` is a customer's role and only ever sees its own tenant. Platform-owner powers (invites, granting minutes, cross-tenant views) must come from a separate owner check, never from `role = ADMIN`.
 
 ### 2. Idempotency, Concurrency & Cost Guardrails
-- **Session & Room Limits:** Require valid `INVITE_CODE` on tenant creation, `tenant.minutesBalance > 0`, max 1 active (`PENDING`/`IN_PROGRESS`) session per user, `emptyTimeout: 60`, `maxParticipants: 2`, and max call duration enforced (`10 min` for `DEMO`, `45 min` for `PRO`) with a 1-minute UI warning.
+- **Invite Claims:** A tenant is created only by atomically claiming an unused, unexpired invite (conditional `updateMany` with `count === 1`) in the same `$transaction` as the `Tenant` + `User` inserts. Store only `SHA-256(token)`, never the token.
+- **Session & Room Limits:** `tenant.minutesBalance > 0`, max 1 active (`PENDING`/`IN_PROGRESS`) session per user, `emptyTimeout: 60`, `maxParticipants: 2`, and max call duration enforced (`10 min` for `DEMO`, `45 min` for `PRO`) with a 1-minute UI warning.
 - **Webhook Verification & Idempotency:** Verify LiveKit `WebhookReceiver` signatures. Finalize-once is enforced by the state machine: inside one `$transaction`, the `IN_PROGRESS -> COMPLETED` conditional `updateMany` must return `count === 1` before saving the transcript and deducting minutes. If `count === 0`, the event was already processed — return `200 OK` and do nothing. (No separate idempotency table during MVP.)
 - **Atomic Minute Deduction:** Deduct `minutesBalance` in a single atomic conditional update (`minutesBalance >= cost`) inside `$transaction`—never read-then-write in two queries.
 - **State Machine:** Enforce `PENDING -> IN_PROGRESS -> COMPLETED -> GRADED | GRADING_FAILED` via conditional `updateMany` checks.
@@ -134,5 +138,8 @@ Keep core domain logic decoupled from Next.js routing and the LiveKit worker:
 - `npm run dev` — Start Next.js dev server
 - `npm run worker:dev` — Start local LiveKit Voice Agent worker
 - `npx prisma migrate dev --name <name>` — Create & apply migration
-- `npm run test:unit` / `npm run test:integration` — Run Vitest suites
-- `npx tsc --noEmit` — Strict TypeScript check
+- `npm run test:unit` / `npm run test:integration` — Run Vitest suites (integration needs `docker compose up -d`)
+- `npm run typecheck` — Route typegen + strict TypeScript check (`next typegen && tsc --noEmit`)
+- `npm run format` / `npm run format:check` — Prettier
+- `npm run invite:create -- "<who it is for>"` — Create a single-use signup invite link (owner only; `--yes` required for a non-local DB)
+- `docker compose up -d` — Start the local Postgres 17 (dev DB `envision`, test DB `envision_test`, port 5433)

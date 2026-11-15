@@ -46,6 +46,23 @@ model Tenant {
   users       User[]
   sessions    InterviewSession[]
   evaluations HrEvaluation[]
+  invite      Invite? // the invite this tenant signed up with (beta only)
+}
+
+// Single-use signup invite for the invite-only beta. PLATFORM-level, not tenant-owned:
+// it exists before any tenant does, so it has no tenantId. Only the owner's
+// `npm run invite:create` script creates these; onboardTenant consumes them.
+// Removal path after the beta: drop the claim step in onboardTenant + one migration.
+model Invite {
+  id             String    @id @default(uuid()) @db.Uuid
+  tokenHash      String    @unique // SHA-256 hex of the token; the token itself is never stored
+  label          String // who it was sent to, e.g. "Sara, People Ops @ Acme"
+  expiresAt      DateTime
+  usedAt         DateTime?
+  usedByTenantId String?   @unique @db.Uuid
+  createdAt      DateTime  @default(now())
+
+  usedByTenant Tenant? @relation(fields: [usedByTenantId], references: [id], onDelete: SetNull)
 }
 
 model User {
