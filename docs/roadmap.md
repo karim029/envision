@@ -27,3 +27,4 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done gate passed
 - 2026-11-15 — **Slimmed Chunk 0 CI** to `tsc`, `lint`, `test:unit`, `build`; web deploys via Vercel GitHub integration. Integration tests in CI, migration `deploy.yml` and Supabase keep-alive moved to Chunk 1. — Nothing to migrate or keep alive before the database exists.
 - 2026-11-15 — **No in-app feedback** (`SessionFeedback` table and widget removed; `feedback_submitted` event dropped → 6 funnel events). — Beta feedback is collected verbally in meetings.
 - 2026-11-15 — **Gemini Flash free tier** for candidate LLM and grading. — $0 stack. Caveat: free-tier content may be used by Google to improve products, so use synthetic/anonymised CVs until switching to a paid tier for real HR data.
+- 2026-11-15 — **Node version and src** Node pinned via package.json engines.node: 26.x (Vercel and setup-node both read it)
