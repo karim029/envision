@@ -1,24 +1,7 @@
-import { z } from "zod";
+// Validated server env. Importing this file validates process.env and throws on
+// bad config (fail fast). next.config.ts imports it so a bad env fails `next build`.
+import { parseEnv } from "./env.schema";
 
-export const serverEnvSchema = z.object({
-  NODE_ENV: z
-    .enum(["development", "test", "production"])
-    .default("development"),
-});
-
-export type ServerEnv = z.infer<typeof serverEnvSchema>;
-
-export function parseEnv(raw: Record<string, string | undefined>): ServerEnv {
-  const result = serverEnvSchema.safeParse(raw);
-  if (result.success) {
-    return result.data;
-  }
-  const formattedErrors = result.error.issues
-    .map((iss) => {
-      return `${iss.path.join(".")}: ${iss.message}`;
-    })
-    .join("\n");
-  throw new Error(`Invalid environment variables:\n${formattedErrors}`);
-}
+export type { ServerEnv } from "./env.schema";
 
 export const env = parseEnv(process.env);
