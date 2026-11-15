@@ -12,7 +12,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "postinstall": "prisma generate",
-    "test:integration": "vitest run --project integration"
+    "test:integration": "vitest run --project integration",
+    "invite:create": "tsx scripts/create-invite.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.1",
@@ -35,6 +36,7 @@
     "prettier": "3.10.1",
     "prisma": "7.10.1",
     "tailwindcss": "4.3.3",
+    "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.1.0"
   },
@@ -43,6 +45,7 @@
   },
   "allowScripts": {
     "prisma@7.10.1": true,
-    "@prisma/engines@7.10.1": true
+    "@prisma/engines@7.10.1": true,
+    "esbuild": false
   }
 }
