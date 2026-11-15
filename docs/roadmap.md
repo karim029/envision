@@ -6,15 +6,15 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done gate passed
 
 ## Chunk status
 
-| Chunk | Goal (short)                                             | Status | Branch(es)              | Notes                                                                   |
-| ----- | -------------------------------------------------------- | ------ | ----------------------- | ----------------------------------------------------------------------- |
-| 0     | Repo, `env.ts`, `/api/health`, CI                        | 🟨     | `chore/repo-foundation` | src layout, Node pin, env + tests done; next: `/api/health`, CI, Vercel |
-| 1     | Schema, Supabase Auth, invite onboarding, integration CI | ⬜     |                         |                                                                         |
-| 2     | Atomic billing + finalize-once state machine             | ⬜     |                         |                                                                         |
-| 3     | CV/JD parsing + persona prompt                           | ⬜     |                         |                                                                         |
-| 4     | Mic check, LiveKit token, worker, webhook                | ⬜     |                         |                                                                         |
-| 5     | Inngest grading + report UI                              | ⬜     |                         |                                                                         |
-| 6     | PostHog + beta launch                                    | ⬜     |                         |                                                                         |
+| Chunk | Goal (short)                                             | Status | Branch(es)              | Notes                                                                                          |
+| ----- | -------------------------------------------------------- | ------ | ----------------------- | ---------------------------------------------------------------------------------------------- |
+| 0     | Repo, `env.ts`, `/api/health`, CI                        | 🟨     | `chore/repo-foundation` | src layout, Node pin, env + tests, Prettier, `/api/health`, CI done; next: Vercel preview + PR |
+| 1     | Schema, Supabase Auth, invite onboarding, integration CI | ⬜     |                         |                                                                                                |
+| 2     | Atomic billing + finalize-once state machine             | ⬜     |                         |                                                                                                |
+| 3     | CV/JD parsing + persona prompt                           | ⬜     |                         |                                                                                                |
+| 4     | Mic check, LiveKit token, worker, webhook                | ⬜     |                         |                                                                                                |
+| 5     | Inngest grading + report UI                              | ⬜     |                         |                                                                                                |
+| 6     | PostHog + beta launch                                    | ⬜     |                         |                                                                                                |
 
 ## Open decisions (challenge before building)
 
