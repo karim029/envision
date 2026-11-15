@@ -8,9 +8,11 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
-    "test:unit": "vitest run tests/unit",
+    "test:unit": "vitest run --project unit",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "postinstall": "prisma generate",
+    "test:integration": "vitest run --project integration"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.1",

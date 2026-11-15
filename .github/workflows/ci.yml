@@ -19,6 +19,28 @@ jobs:
   ci:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
+    # Throwaway Postgres for integration tests (same major version as Supabase).
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: envision_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d envision_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/envision_test
+      # Required by src/env.ts at build time. The build never connects to it.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/envision_test
+
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -44,6 +66,9 @@ jobs:
 
       - name: Unit tests
         run: npm run test:unit
+
+      - name: Integration tests (migrations + real Postgres)
+        run: npm run test:integration
 
       - name: Build
         run: npm run build
