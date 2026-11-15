@@ -1,0 +1,91 @@
+// Single source of truth for the database. Change it, then run:
+//   npx prisma migrate dev --name <name>   (never `db push`)
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum PlanTier {
+  DEMO
+  PRO
+}
+
+enum UserRole {
+  ADMIN
+  MEMBER
+}
+
+enum SessionStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  GRADED
+  GRADING_FAILED
+}
+
+enum HrLevel {
+  JUNIOR
+  MID
+  SENIOR
+  LEAD
+}
+
+model Tenant {
+  id             String   @id @default(uuid()) @db.Uuid
+  name           String
+  planTier       PlanTier @default(DEMO)
+  minutesBalance Int      @default(30)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  users       User[]
+  sessions    InterviewSession[]
+  evaluations HrEvaluation[]
+}
+
+model User {
+  id        String   @id @db.Uuid // = Supabase auth.users.id (no default: Supabase creates it)
+  tenantId  String   @db.Uuid
+  email     String   @unique
+  role      UserRole @default(MEMBER)
+  createdAt DateTime @default(now())
+
+  tenant   Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  sessions InterviewSession[]
+
+  @@index([tenantId])
+}
+
+model InterviewSession {
+  id        String        @id @default(uuid()) @db.Uuid
+  tenantId  String        @db.Uuid
+  userId    String        @db.Uuid
+  status    SessionStatus @default(PENDING)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  tenant     Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user       User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  evaluation HrEvaluation?
+
+  @@index([tenantId])
+  @@index([userId, status]) // "max 1 active session per user" lookup (Chunk 4)
+}
+
+model HrEvaluation {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  sessionId String   @unique @db.Uuid
+  level     HrLevel
+  createdAt DateTime @default(now())
+
+  tenant  Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  session InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
