@@ -7,7 +7,14 @@ export const serverEnvSchema = z.object({
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
 
 export function parseEnv(raw: Record<string, string | undefined>): ServerEnv {
-  throw new Error("TODO: implement");
+    const result = serverEnvSchema.safeParse(raw)
+    if(result.success){
+        return result.data
+    }
+    const formattedErrors = result.error.issues.map((iss)=>{
+       return `${iss.path.join('.')}: ${iss.message}`
+    }).join('\n')
+    throw new Error(`Invalid environment variables:\n${formattedErrors}`)
 }
 
 export const env = parseEnv(process.env);
