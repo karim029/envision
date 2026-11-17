@@ -1,5 +1,6 @@
 // Pure functions: no env, no database. Unit-tested in tests/unit/invite-token.test.ts.
 // Both come from "node:crypto".
+import { createHash, randomBytes } from "node:crypto";
 
 /**
  * A new, unguessable invite token to put in the signup link (?invite=<token>).
@@ -7,7 +8,12 @@
  * Use crypto.randomBytes — never Math.random() for anything security-related.
  */
 export function generateInviteToken(): string {
-  throw new Error("TODO: implement");
+  const buf = randomBytes(32);
+  const inviteToken = buf.toBase64({
+    alphabet: "base64url",
+    omitPadding: true,
+  });
+  return inviteToken;
 }
 
 /**
@@ -16,6 +22,6 @@ export function generateInviteToken(): string {
  * hash finds the invite without the database ever holding the token itself.
  */
 export function hashInviteToken(token: string): string {
-  void token;
-  throw new Error("TODO: implement");
+  const tokenHash = createHash("sha256").update(token.trim()).digest("hex");
+  return tokenHash;
 }
