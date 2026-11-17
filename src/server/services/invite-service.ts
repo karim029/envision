@@ -18,6 +18,7 @@ export interface CreatedInvite {
   token: string;
   expiresAt: Date;
 }
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Rules (see tests/integration/invite-service.test.ts):
@@ -29,9 +30,19 @@ export interface CreatedInvite {
 export async function createInvite(
   input: CreateInviteInput,
 ): Promise<CreatedInvite> {
-  void input;
-  void prisma;
-  void generateInviteToken;
-  void hashInviteToken;
-  throw new Error("TODO: implement");
+  const parsedInput = createInviteInputSchema.parse(input);
+  const token = generateInviteToken();
+  const invite = await prisma.invite.create({
+    data: {
+      label: parsedInput.label,
+      tokenHash: hashInviteToken(token),
+      expiresAt: new Date(Date.now() + parsedInput.expiresInDays * DAY_MS),
+    },
+  });
+  const inviteInput: CreatedInvite = {
+    inviteId: invite.id,
+    token: token,
+    expiresAt: invite.expiresAt,
+  };
+  return inviteInput;
 }

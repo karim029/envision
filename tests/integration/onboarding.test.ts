@@ -7,6 +7,7 @@ import {
   InvalidInviteError,
   onboardTenant,
 } from "@/server/services/onboarding-service";
+import { ZodError } from "zod";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -190,10 +191,10 @@ describe("onboardTenant", () => {
 
     await expect(
       onboardTenant(signupInput(token, { companyName: "   " })),
-    ).rejects.toThrow();
+    ).rejects.toThrow(ZodError);
     await expect(
       onboardTenant(signupInput(token, { authUserId: "not-a-uuid" })),
-    ).rejects.toThrow();
+    ).rejects.toThrow(ZodError);
 
     expect(await prisma.tenant.count()).toBe(0);
     const invite = await prisma.invite.findUniqueOrThrow({
