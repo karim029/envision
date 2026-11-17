@@ -9,10 +9,7 @@ import { createHash, randomBytes } from "node:crypto";
  */
 export function generateInviteToken(): string {
   const buf = randomBytes(32);
-  const inviteToken = buf.toBase64({
-    alphabet: "base64url",
-    omitPadding: true,
-  });
+  const inviteToken = buf.toString("base64url");
   return inviteToken;
 }
 
