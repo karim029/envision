@@ -48,8 +48,69 @@ export class InvalidInviteError extends Error {
 export async function onboardTenant(
   input: OnboardTenantInput,
 ): Promise<OnboardTenantResult> {
-  void input;
-  void prisma;
-  void hashInviteToken;
-  throw new Error("TODO: implement");
+  const parsedInput = onboardTenantInputSchema.parse(input);
+  const now = new Date();
+  const hashedToken = hashInviteToken(parsedInput.inviteToken);
+  const user = await prisma.user.findUnique({
+    where: {
+      id: parsedInput.authUserId,
+    },
+  });
+  if (user) {
+    return { created: false, tenantId: user.tenantId, userId: user.id };
+  }
+  try {
+    const result = await prisma.$transaction(
+      async (tx): Promise<OnboardTenantResult> => {
+        const rowsUpdated = await tx.invite.updateMany({
+          where: {
+            tokenHash: hashedToken,
+            expiresAt: { gt: now },
+            usedAt: null,
+          },
+          data: {
+            usedAt: now,
+          },
+        });
+        if (rowsUpdated.count === 0) {
+          throw new InvalidInviteError();
+        }
+        const tenant = await tx.tenant.create({
+          data: {
+            name: parsedInput.companyName,
+          },
+        });
+        const newUser = await tx.user.create({
+          data: {
+            id: parsedInput.authUserId,
+            email: parsedInput.email,
+            role: "ADMIN",
+            tenantId: tenant.id,
+          },
+        });
+        await tx.invite.update({
+          where: {
+            tokenHash: hashedToken,
+          },
+          data: {
+            usedByTenantId: tenant.id,
+          },
+        });
+        return { tenantId: tenant.id, userId: newUser.id, created: true };
+      },
+    );
+    return result;
+  } catch (error) {
+    if (error instanceof InvalidInviteError) {
+      const user = await prisma.user.findUnique({
+        where: {
+          id: parsedInput.authUserId,
+        },
+      });
+      if (user) {
+        return { created: false, tenantId: user.tenantId, userId: user.id };
+      }
+    }
+    throw error;
+  }
 }

@@ -148,6 +148,39 @@ describe("onboardTenant", () => {
     expect(await prisma.user.count()).toBe(1);
   });
 
+  it("handles a double-click: the same signup sent twice at once succeeds both times", async () => {
+    const { token } = await seedInvite();
+    const input = signupInput(token);
+
+    // Both requests run at the same moment. One claims the invite; the other must not
+    // report "invalid invite" — it should see the winner's account and return it.
+    const results = await Promise.all([
+      onboardTenant(input),
+      onboardTenant(input),
+    ]);
+
+    expect(results.map((r) => r.tenantId)).toEqual([
+      results[0].tenantId,
+      results[0].tenantId,
+    ]);
+    expect(results.map((r) => r.created).sort()).toEqual([false, true]);
+    expect(await prisma.tenant.count()).toBe(1);
+  });
+
+  it("does not disguise other failures as an invalid invite", async () => {
+    const first = await seedInvite();
+    await onboardTenant(signupInput(first.token, { email: "taken@acme.test" }));
+
+    const second = await seedInvite();
+    const attempt = onboardTenant(
+      signupInput(second.token, { email: "taken@acme.test" }),
+    );
+
+    // An already-registered email is not an invite problem: the real error must come through.
+    await expect(attempt).rejects.toThrow();
+    await expect(attempt).rejects.not.toBeInstanceOf(InvalidInviteError);
+  });
+
   it("is atomic: if the user can't be created, no tenant remains and the invite stays unused", async () => {
     const first = await seedInvite();
     await onboardTenant(signupInput(first.token, { email: "taken@acme.test" }));
