@@ -66,6 +66,20 @@ export type InviteCheck =
  * 3. Read-only: never writes anything.
  */
 export async function checkInvite(token: string): Promise<InviteCheck> {
-  void token;
-  throw new Error("TODO: implement");
+  const hashedToken = hashInviteToken(token);
+  const invite = await prisma.invite.findUnique({
+    where: {
+      tokenHash: hashedToken,
+    },
+  });
+  if (!invite) {
+    return { usable: false, reason: "not_found" };
+  }
+  if (invite.usedAt !== null) {
+    return { usable: false, reason: "used" };
+  }
+  if (invite.expiresAt <= new Date()) {
+    return { usable: false, reason: "expired" };
+  }
+  return { usable: true };
 }
