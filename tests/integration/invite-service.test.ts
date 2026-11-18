@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { prisma } from "@/server/db/client";
-import { createInvite } from "@/server/services/invite-service";
+import { checkInvite, createInvite } from "@/server/services/invite-service";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const sha256Hex = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -58,5 +58,90 @@ describe("createInvite", () => {
   it("rejects an empty label and writes nothing", async () => {
     await expect(createInvite({ label: "   " })).rejects.toThrow();
     expect(await prisma.invite.count()).toBe(0);
+  });
+});
+
+describe("checkInvite", () => {
+  it("says a fresh invite is usable", async () => {
+    const { token } = await createInvite({ label: "Sara @ Acme" });
+
+    expect(await checkInvite(token)).toEqual({ usable: true });
+  });
+
+  it("ignores whitespace around a pasted token", async () => {
+    const { token } = await createInvite({ label: "Sara @ Acme" });
+
+    expect(await checkInvite(`  ${token}\n`)).toEqual({ usable: true });
+  });
+
+  it("reports an unknown token as not_found", async () => {
+    expect(await checkInvite("this-token-does-not-exist")).toEqual({
+      usable: false,
+      reason: "not_found",
+    });
+  });
+
+  it("reports an empty token as not_found", async () => {
+    expect(await checkInvite("")).toEqual({
+      usable: false,
+      reason: "not_found",
+    });
+  });
+
+  it("reports a used invite as used", async () => {
+    const { inviteId, token } = await createInvite({ label: "Sara @ Acme" });
+    await prisma.invite.update({
+      where: { id: inviteId },
+      data: { usedAt: new Date() },
+    });
+
+    expect(await checkInvite(token)).toEqual({
+      usable: false,
+      reason: "used",
+    });
+  });
+
+  it("reports an expired invite as expired", async () => {
+    const { inviteId, token } = await createInvite({ label: "Sara @ Acme" });
+    await prisma.invite.update({
+      where: { id: inviteId },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+
+    expect(await checkInvite(token)).toEqual({
+      usable: false,
+      reason: "expired",
+    });
+  });
+
+  it("reports used (not expired) when an invite is both used and expired", async () => {
+    const { inviteId, token } = await createInvite({ label: "Sara @ Acme" });
+    await prisma.invite.update({
+      where: { id: inviteId },
+      data: { usedAt: new Date(), expiresAt: new Date(Date.now() - 1000) },
+    });
+
+    expect(await checkInvite(token)).toEqual({
+      usable: false,
+      reason: "used",
+    });
+  });
+
+  it("is read-only: checking does not use up the invite", async () => {
+    const { inviteId, token } = await createInvite({ label: "Sara @ Acme" });
+
+    await checkInvite(token);
+    await checkInvite(token);
+
+    const invite = await prisma.invite.findUniqueOrThrow({
+      where: { id: inviteId },
+    });
+    expect(invite.usedAt).toBeNull();
+  });
+
+  it("never reveals the invite's private label", async () => {
+    const { token } = await createInvite({ label: "Sara — warm lead" });
+
+    expect(JSON.stringify(await checkInvite(token))).not.toContain("warm lead");
   });
 });
