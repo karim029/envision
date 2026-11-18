@@ -1,4 +1,4 @@
-import { parseEnv } from "@/env.schema";
+import { parseEnv, parsePublicEnv } from "@/env.schema";
 import { describe, expect, it } from "vitest";
 
 const DATABASE_URL = "postgresql://postgres:postgres@localhost:5433/envision";
@@ -35,5 +35,34 @@ describe("ParseEnv", () => {
     expect(() => parseEnv({ NODE_ENV: "banana" })).toThrow(
       /NODE_ENV[\s\S]*DATABASE_URL/,
     );
+  });
+});
+
+describe("parsePublicEnv", () => {
+  const valid = {
+    NEXT_PUBLIC_SUPABASE_URL: "https://abcd.supabase.co",
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
+  };
+
+  it("returns the public env for valid input", () => {
+    expect(parsePublicEnv(valid)).toEqual(valid);
+  });
+  it("requires both Supabase values", () => {
+    expect(() => parsePublicEnv({})).toThrow(
+      /NEXT_PUBLIC_SUPABASE_URL[\s\S]*NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY/,
+    );
+  });
+  it("rejects a Supabase URL that is not http(s)", () => {
+    expect(() =>
+      parsePublicEnv({
+        ...valid,
+        NEXT_PUBLIC_SUPABASE_URL: "abcd.supabase.co",
+      }),
+    ).toThrow(/NEXT_PUBLIC_SUPABASE_URL/);
+  });
+  it("never includes server secrets", () => {
+    expect(
+      parsePublicEnv({ ...valid, DATABASE_URL: "postgresql://x" }),
+    ).not.toHaveProperty("DATABASE_URL");
   });
 });
