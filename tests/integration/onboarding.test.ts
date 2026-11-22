@@ -3,10 +3,8 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { prisma } from "@/server/db/client";
-import {
-  InvalidInviteError,
-  onboardTenant,
-} from "@/server/services/onboarding-service";
+import { onboardTenant } from "@/server/services/onboarding-service";
+import { InvalidInviteError } from "@/server/services/invite-service";
 import { ZodError } from "zod";
 
 const DAY_MS = 24 * 60 * 60 * 1000;

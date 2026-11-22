@@ -2,7 +2,11 @@
 // consuming a single-use invite. Called by the signup flow in Slice 1d — never from the browser.
 import { z } from "zod";
 import { prisma } from "@/server/db/client";
-import { hashInviteToken } from "./invite-token";
+import {
+  claimInvite,
+  InvalidInviteError,
+  recordInviteTenant,
+} from "./invite-service";
 
 export const onboardTenantInputSchema = z.object({
   /** Supabase auth.users.id — becomes User.id. */
@@ -22,14 +26,6 @@ export interface OnboardTenantResult {
   created: boolean;
 }
 
-/** Unknown, already used, or expired invite. One error for all three on purpose. */
-export class InvalidInviteError extends Error {
-  constructor() {
-    super("This invite link is invalid, already used, or expired");
-    this.name = "InvalidInviteError";
-  }
-}
-
 /**
  * Rules (see tests/integration/onboarding.test.ts):
  * 1. Validate input with onboardTenantInputSchema.
@@ -37,12 +33,11 @@ export class InvalidInviteError extends Error {
  *    created: false. This must happen BEFORE touching the invite: on a retry the
  *    invite is already used.
  * 3. Otherwise, in ONE transaction:
- *    a. Claim the invite with a single conditional update — matching tokenHash, still
- *       unused, not expired — and require that exactly 1 row changed. 0 rows →
- *       throw InvalidInviteError (the transaction rolls back, nothing is written).
+ *    a. claimInvite(tx, …) — the invite service's atomic claim; throws InvalidInviteError
+ *       if the invite is unknown, used, or expired (the transaction rolls back).
  *    b. Create the Tenant (name = companyName; planTier and minutesBalance come from
  *       the schema defaults) and its User (id = authUserId, role ADMIN).
- *    c. Record which tenant used the invite (Invite.usedByTenantId).
+ *    c. recordInviteTenant(tx, …) — record which tenant used the invite.
  *    If any step fails, none of them may remain — including the claim on the invite.
  */
 export async function onboardTenant(
@@ -50,7 +45,6 @@ export async function onboardTenant(
 ): Promise<OnboardTenantResult> {
   const parsedInput = onboardTenantInputSchema.parse(input);
   const now = new Date();
-  const hashedToken = hashInviteToken(parsedInput.inviteToken);
   const user = await prisma.user.findUnique({
     where: {
       id: parsedInput.authUserId,
@@ -62,19 +56,12 @@ export async function onboardTenant(
   try {
     const result = await prisma.$transaction(
       async (tx): Promise<OnboardTenantResult> => {
-        const rowsUpdated = await tx.invite.updateMany({
-          where: {
-            tokenHash: hashedToken,
-            expiresAt: { gt: now },
-            usedAt: null,
-          },
-          data: {
-            usedAt: now,
-          },
-        });
-        if (rowsUpdated.count === 0) {
-          throw new InvalidInviteError();
-        }
+        // tx is passed in so the claim rolls back if anything below fails.
+        const { inviteId } = await claimInvite(
+          tx,
+          parsedInput.inviteToken,
+          now,
+        );
         const tenant = await tx.tenant.create({
           data: {
             name: parsedInput.companyName,
@@ -88,14 +75,7 @@ export async function onboardTenant(
             tenantId: tenant.id,
           },
         });
-        await tx.invite.update({
-          where: {
-            tokenHash: hashedToken,
-          },
-          data: {
-            usedByTenantId: tenant.id,
-          },
-        });
+        await recordInviteTenant(tx, inviteId, tenant.id);
         return { tenantId: tenant.id, userId: newUser.id, created: true };
       },
     );
