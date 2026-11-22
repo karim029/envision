@@ -27,8 +27,24 @@ export type AuthContextResult =
 export async function getAuthContext(
   authUserId: string,
 ): Promise<AuthContextResult> {
-  void authUserId;
-  void z;
-  void prisma;
-  throw new Error("TODO: implement");
+  const validUserId = z.uuid().parse(authUserId);
+  const dbUser = await prisma.user.findUnique({
+    select: {
+      id: true,
+      role: true,
+      tenantId: true,
+    },
+    where: {
+      id: validUserId,
+    },
+  });
+  if (!dbUser) {
+    return { status: "needs_onboarding" };
+  }
+  const userContext: AuthContext = {
+    userId: dbUser.id,
+    tenantId: dbUser.tenantId,
+    role: dbUser.role,
+  };
+  return { status: "ok", context: userContext };
 }
