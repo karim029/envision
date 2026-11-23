@@ -3,7 +3,11 @@
 // small SignUpAuthResult language. The Supabase-specific translation lives in
 // src/lib/supabase/sign-up-adapter.ts — swap providers by writing a new adapter.
 import { z } from "zod";
-import { checkInvite, type InviteCheckFailure } from "./invite-service";
+import {
+  checkInvite,
+  InvalidInviteError,
+  type InviteCheckFailure,
+} from "./invite-service";
 import { onboardTenant } from "./onboarding-service";
 
 // ─── What the injected auth provider must answer ────────────────────────────────────────
@@ -71,9 +75,37 @@ export async function signUpWithInvite(
   input: unknown,
   deps: SignUpDeps,
 ): Promise<SignUpOutcome> {
-  void input;
-  void deps;
-  void checkInvite;
-  void onboardTenant;
-  throw new Error("TODO: implement");
+  const parsedResult = signUpInputSchema.safeParse(input);
+  if (parsedResult.error) {
+    return {
+      status: "invalid_input",
+      fieldErrors: z.flattenError(parsedResult.error).fieldErrors,
+    };
+  }
+  const inviteCheckResult = await checkInvite(parsedResult.data.inviteToken);
+  if (inviteCheckResult.usable === false) {
+    return { status: "invite_unusable", reason: inviteCheckResult.reason };
+  }
+  const signUpResult = await deps.signUp(
+    parsedResult.data.email,
+    parsedResult.data.password,
+  );
+  if (signUpResult.status !== "created") {
+    return { status: signUpResult.status };
+  }
+
+  try {
+    await onboardTenant({
+      authUserId: signUpResult.authUserId,
+      companyName: parsedResult.data.companyName,
+      email: parsedResult.data.email,
+      inviteToken: parsedResult.data.inviteToken,
+    });
+  } catch (error) {
+    if (error instanceof InvalidInviteError) {
+      return { status: "invite_claimed_meanwhile" };
+    }
+    throw error;
+  }
+  return { status: "check_email" };
 }
