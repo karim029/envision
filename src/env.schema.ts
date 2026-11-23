@@ -1,5 +1,5 @@
 // Pure env parsing: no side effects, safe to import from unit tests.
-// The app imports `env` from "@/env" instead.
+// The app imports `env` from "@/env" (server) and `publicEnv` from "@/env.public" instead.
 import { z } from "zod";
 
 const postgresUrl = z.url({ protocol: /^postgres(ql)?$/ });
@@ -13,10 +13,21 @@ export const serverEnvSchema = z.object({
   DATABASE_URL: postgresUrl,
 });
 
-export type ServerEnv = z.infer<typeof serverEnvSchema>;
+// Values the BROWSER also needs. Not secrets: Supabase's publishable key is meant to ship to
+// browsers (data is protected by RLS + the disabled Data API, not by hiding this key).
+export const publicEnvSchema = z.object({
+  NEXT_PUBLIC_SUPABASE_URL: z.url({ protocol: /^https?$/ }),
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
+});
 
-export function parseEnv(raw: Record<string, string | undefined>): ServerEnv {
-  const result = serverEnvSchema.safeParse(raw);
+export type ServerEnv = z.infer<typeof serverEnvSchema>;
+export type PublicEnv = z.infer<typeof publicEnvSchema>;
+
+type RawEnv = Record<string, string | undefined>;
+
+// One error listing every bad key as "key: message" — never the value (values may be secrets).
+function parseWith<T extends z.ZodType>(schema: T, raw: RawEnv): z.infer<T> {
+  const result = schema.safeParse(raw);
   if (result.success) {
     return result.data;
   }
@@ -26,4 +37,12 @@ export function parseEnv(raw: Record<string, string | undefined>): ServerEnv {
     })
     .join("\n");
   throw new Error(`Invalid environment variables:\n${formattedErrors}`);
+}
+
+export function parseEnv(raw: RawEnv): ServerEnv {
+  return parseWith(serverEnvSchema, raw);
+}
+
+export function parsePublicEnv(raw: RawEnv): PublicEnv {
+  return parseWith(publicEnvSchema, raw);
 }
