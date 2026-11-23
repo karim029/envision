@@ -7,7 +7,7 @@ export const MISSING_INVITE_MESSAGE =
   "You need an invite link to sign up. Ask the person who invited you for one.";
 
 export const CHECK_EMAIL_MESSAGE =
-  "Check your email — we sent you a link to confirm your account.";
+  "Check your email, we sent you a link to confirm your account.";
 
 export const INVITE_PROBLEM_MESSAGES: Record<InviteCheckFailure, string> = {
   not_found:
