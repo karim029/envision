@@ -10,7 +10,7 @@ Multi-tenant B2B SaaS platform for training HR interviewers (English MVP). The H
 
 ## Tech Stack ($0 MVP)
 - **Web App & API:** Next.js (App Router, TypeScript strict mode) hosted on Vercel Hobby
-- **Database & Auth:** Supabase (PostgreSQL + Supabase Auth via `@supabase/ssr`, including `/auth/callback` PKCE exchange & password reset)
+- **Database & Auth:** Supabase (PostgreSQL + Supabase Auth via `@supabase/ssr`, including an `/auth/confirm` route that calls `verifyOtp` with a `token_hash` for email confirmation & password reset — works across devices, unlike the PKCE `/auth/callback` code exchange)
 - **ORM & Migrations:** Prisma v7 (`schema.prisma` is the single source of truth; always use `npx prisma migrate dev --name <name>` — never `db push`). Configure `DIRECT_URL` (port `5432`) in `prisma.config.ts` for migrations and `DATABASE_URL` (PgBouncer pooler, port `6543`) for runtime queries.
 - **Env Validation:** `src/env.ts` using `zod` (fail fast on missing keys)
 - **Real-Time Voice Agent:** LiveKit Cloud (Free tier) + `@livekit/agents` (Node.js/TypeScript worker)
@@ -32,7 +32,7 @@ Use this roadmap so you never get lost on what to build next. You can use 1 bran
 - **Done Gate:** Pushing a branch runs `tsc`, `lint`, `test:unit`, and `build` cleanly in GitHub Actions; `/api/health` responds on the Vercel preview URL.
 
 ### Chunk 1: Database Schema, Migrations & Tenant Onboarding
-- **Goal:** Prisma v7 config (`DATABASE_URL` + `DIRECT_URL`), initial SQL migration (`Tenant`, `User`, `InterviewSession`, `HrEvaluation`) plus `Invite`, Supabase Auth (`/auth/callback`, login/signup via single-use invite link, password reset), `requireAuthContext()`, and atomic `onboardingService`. Extend CI with `test:integration` (ephemeral Postgres + `prisma migrate deploy`); add `deploy.yml` (migrations on push to `main`) and Supabase `keep-alive.yml`.
+- **Goal:** Prisma v7 config (`DATABASE_URL` + `DIRECT_URL`), initial SQL migration (`Tenant`, `User`, `InterviewSession`, `HrEvaluation`) plus `Invite`, Supabase Auth (`/auth/confirm`, login/signup via single-use invite link, password reset), `requireAuthContext()`, and atomic `onboardingService`. Extend CI with `test:integration` (ephemeral Postgres + `prisma migrate deploy`); add `deploy.yml` (migrations on push to `main`) and Supabase `keep-alive.yml`.
 - **Done Gate:** Integration test proves signing up with a valid invite link creates a `DEMO` tenant with `30` minutes and an `ADMIN` user and marks the invite used, and unknown, used, or expired invites are rejected (including two simultaneous signups on one invite: exactly one succeeds).
 
 ### Chunk 2: Atomic Billing & Finalize-Once Session Logic
@@ -105,7 +105,7 @@ Keep core domain logic decoupled from Next.js routing and the LiveKit worker:
 - `prisma/` — `schema.prisma`, `prisma.config.ts`, and versioned SQL migrations.
 - `src/env.ts` — Zod-validated environment variables.
 - `src/lib/analytics/` — PostHog client/server wrappers and structured logger (`{ level, event, tenantId, sessionId, roomSid }`).
-- `src/app/` — Next.js pages (Server Components), `/auth/callback`, Server Actions, and `/api` Route Handlers (`/api/health`, `/api/livekit/token`, `/api/webhooks/livekit`, `/api/inngest`).
+- `src/app/` — Next.js pages (Server Components), `/auth/confirm`, Server Actions, and `/api` Route Handlers (`/api/health`, `/api/livekit/token`, `/api/webhooks/livekit`, `/api/inngest`).
 - `src/server/auth/` — `requireAuthContext()` resolving `{ userId, tenantId, role }` from Supabase Auth.
 - `src/server/db/` — Prisma client singleton & transaction helpers.
 - `src/server/services/` — Pure TypeScript services (`onboardingService`, `interviewService`, `billingService`, `documentParserService`, `hrGradingService`).
