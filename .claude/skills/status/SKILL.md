@@ -31,5 +31,5 @@ Read `docs/BUILD_PLAN.md` and open the changed files as needed.
 2. **Done on this branch:** what the commits and code actually do, checked against the code rather than just the commit messages.
 3. **In progress:** what the uncommitted changes are, and whether they're a finished step worth committing now (give the `git add` + commit if so).
 4. **Left for this branch:** the remaining pieces to finish this slice, including anything the code points to that doesn't exist yet (e.g. a redirect to a page nobody has built).
-5. **PR check:** lines changed vs the ~300-line budget, whether it mixes concerns, and whether it's time to open a PR, split the branch, or keep going.
+5. **PR check:** non-test lines changed vs the ~400-line budget (tests, lockfiles, generated excluded), whether it mixes concerns (the main rule), and whether it's time to open a PR, split the branch, or keep going.
 6. **Next step:** exactly one concrete thing to do next. If it's new learn-zone work, suggest `/kickoff <slice>`.
