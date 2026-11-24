@@ -1,7 +1,7 @@
 ---
 name: decide
 description: Debate an architecture or design decision for Envision (library, table, service boundary, hosting, data flow) and record it as a decisions-log entry once Karim chooses.
-argument-hint: [the question, e.g. "where does the LiveKit worker run?"]
+argument-hint: "[the question, e.g. where does the LiveKit worker run?]"
 disable-model-invocation: true
 ---
 
