@@ -1,145 +1,81 @@
-# CLAUDE.md
+# Envision
 
-## Project Overview & Greenfield Status
-Multi-tenant B2B SaaS platform for training HR interviewers (English MVP). The HR user uploads a Job Description (JD) and Candidate CV; a real-time Voice AI agent acts as the candidate during a live mock interview. Post-call, an evaluation engine grades the HR interviewer's questioning technique (depth, bias avoidance, STAR probing, JD alignment) and assigns an HR Interviewer Level (Junior, Mid, Senior, Lead).
+Multi-tenant B2B SaaS for training HR interviewers. The HR user uploads a JD + candidate CV, interviews a real-time voice AI playing the candidate, then gets graded on questioning technique (depth, bias avoidance, STAR probing, JD alignment) with a level: Junior / Mid / Senior / Lead.
 
-- **Commercial Stage:** Invite-only free HR validation MVP ($0 infrastructure stack; `planTier = DEMO` with 30 free minutes, gated by single-use invite links (`Invite` table, hashed tokens, created by the owner with `npm run invite:create`)). Architecture must support future paid `PRO` tenants without schema rewrites.
-- **Product & Backlog Reference:** Always check `docs/PRODUCT_ROADMAP.md` before proposing features. Never build Phase 2 backlog items during MVP.
-- **Build Approach (From Scratch):** Greenfield repo built incrementally in small, clean slices. Never assume boilerplate exists. Always check the **Build Roadmap (Chunks 0–6)** below before starting work so we build in strict dependency order.
-- **Beta feedback:** Collected verbally in meetings with testers — no in-app feedback feature or table during MVP.
+Stage: invite-only free beta for 5–10 HR testers. `planTier = DEMO` (30 free minutes); schema must allow paid `PRO` later without rewrites.
 
-## Tech Stack ($0 MVP)
-- **Web App & API:** Next.js (App Router, TypeScript strict mode) hosted on Vercel Hobby
-- **Database & Auth:** Supabase (PostgreSQL + Supabase Auth via `@supabase/ssr`, including an `/auth/confirm` route that calls `verifyOtp` with a `token_hash` for email confirmation & password reset — works across devices, unlike the PKCE `/auth/callback` code exchange)
-- **ORM & Migrations:** Prisma v7 (`schema.prisma` is the single source of truth; always use `npx prisma migrate dev --name <name>` — never `db push`). Configure `DIRECT_URL` (port `5432`) in `prisma.config.ts` for migrations and `DATABASE_URL` (PgBouncer pooler, port `6543`) for runtime queries.
-- **Env Validation:** `src/env.ts` using `zod` (fail fast on missing keys)
-- **Real-Time Voice Agent:** LiveKit Cloud (Free tier) + `@livekit/agents` (Node.js/TypeScript worker)
-  - **STT:** Deepgram Nova-3 (English)
-  - **Candidate LLM:** Google Gemini Flash (`@livekit/agents-plugin-google`) — free tier for now; use synthetic/anonymised CVs until a paid tier is enabled
-  - **TTS:** Deepgram Aura-2 (shares Deepgram free credit)
-  - **Worker hosting:** TBD before Chunk 4 (long-running process — cannot run on Vercel). See `roadmap.md` D3.
-- **Post-Call Evaluation:** Google Gemini Structured Outputs (JSON Schema)
-- **Background Jobs:** Inngest (Next.js `/api/inngest` route handler)
-- **Analytics, Logs & Error Tracking:** PostHog Free Tier (`posthog-js` + `posthog-node` — funnel events, session replay, exception capture, and structured JSON logs)
-- **UI:** Tailwind CSS + `shadcn/ui` (Server Components by default)
-- **Testing:** Vitest (unit & integration tests against an isolated Postgres test database)
+- Build plan (Chunks 0–6, strict order, Done Gates): `docs/BUILD_PLAN.md`
+- Progress, open decisions, decisions log and parked backlog: `docs/roadmap.md`. Never build backlog items.
+- What Karim already owns vs is still learning: `docs/LEARNING.md`
+- **Next.js 16.4 differs from older versions and from your training data** (e.g. `middleware` is now `proxy.ts`). Before writing *or explaining* Next.js code, read the matching guide in `node_modules/next/dist/docs/`, and point Karim to it so he learns from the real docs: @AGENTS.md
 
-## Build Roadmap (Chunks 0–6 — Build Strictly in Order)
-Use this roadmap so you never get lost on what to build next. You can use 1 branch or multiple small branches per chunk—just complete each chunk's **Done Gate** before moving to the next:
+## How we work: Karim drives, Claude navigates
 
-### Chunk 0: Repo Foundation, Env Safety & CI
-- **Goal:** Working Next.js TypeScript project, Zod `src/env.ts`, `/api/health` endpoint, Vitest set up with one real unit test, GitHub Actions CI (`ci.yml` on every push & PR: `tsc`, `lint`, `test:unit`, `build`). Web deploys via Vercel's GitHub integration (no custom deploy workflow yet).
-- **Done Gate:** Pushing a branch runs `tsc`, `lint`, `test:unit`, and `build` cleanly in GitHub Actions; `/api/health` responds on the Vercel preview URL.
+Karim is a junior backend engineer building this to become a strong engineer, learning Next.js, Postgres concurrency, voice agents and production SaaS. Speed matters, but never at the cost of him understanding his own system.
 
-### Chunk 1: Database Schema, Migrations & Tenant Onboarding
-- **Goal:** Prisma v7 config (`DATABASE_URL` + `DIRECT_URL`), initial SQL migration (`Tenant`, `User`, `InterviewSession`, `HrEvaluation`) plus `Invite`, Supabase Auth (`/auth/confirm`, login/signup via single-use invite link, password reset), `requireAuthContext()`, and atomic `onboardingService`. Extend CI with `test:integration` (ephemeral Postgres + `prisma migrate deploy`); add `deploy.yml` (migrations on push to `main`) and Supabase `keep-alive.yml`.
-- **Done Gate:** Integration test proves signing up with a valid invite link creates a `DEMO` tenant with `30` minutes and an `ADMIN` user and marks the invite used, and unknown, used, or expired invites are rejected (including two simultaneous signups on one invite: exactly one succeeds).
+**Ownership zones** (enforced by `.claude/settings.json`: edits in learn-zone paths prompt for approval)
 
-### Chunk 2: Atomic Billing & Finalize-Once Session Logic
-- **Goal:** `billingService` handling atomic minute deduction (`minutesBalance >= cost`) and session state transitions (`PENDING -> IN_PROGRESS -> COMPLETED -> GRADED | GRADING_FAILED`). Duplicate finalize calls are made harmless by the state machine itself: the `IN_PROGRESS -> COMPLETED` conditional `updateMany` matches 0 rows on a repeat, so minutes are not deducted again.
-- **Done Gate:** Vitest integration test firing 10 concurrent `Promise.all` finalize calls for the same session only deducts minutes once and never lets `minutesBalance` go negative.
+- **Learn zone: Karim writes it.** Domain services, auth, DB transactions, webhooks, worker logic, prompts, and the *first* use of any new Next.js pattern (Server Component data loading, Server Action, Route Handler, middleware, etc.). Paths: `src/server/**`, `src/app/**`, `src/lib/supabase/**`, `src/proxy.ts`, `src/env*.ts`, `src/worker/**`, `prisma/schema.prisma`, migrations.
+- **Delegate zone: Claude may write it, then explains it in 2–3 lines.** Config, CI YAML, scripts, Tailwind/shadcn markup in `src/components/**`, test fixtures, and any pattern `docs/LEARNING.md` marks **owned** (Karim has done it once and can explain it).
+- **Contracts: Claude writes these for learn-zone work.** Types, Zod schemas, Prisma models (as a proposal), function signatures with `throw new Error("TODO: implement")`, and failing Vitest tests that define done.
 
-### Chunk 3: Document Parsing & Candidate Persona Engine
-- **Goal:** In-memory PDF/DOCX parser (`documentParserService`, max 5MB, rejects scanned/empty PDFs with `< 100` extracted characters) + XML-delimited candidate system prompt builder (`<candidate_cv>`, `<job_description>`).
-- **Done Gate:** Unit tests verify scanned PDF rejection, prompt injection containment, and strict candidate persona instructions.
+**In the learn zone, Claude does not write implementation code** unless Karim runs `/hint` or asks for code explicitly. Hints climb one level at a time (see `/hint`).
 
-### Chunk 4: Pre-Call Mic Check, LiveKit Rooms & Voice Worker
-- **Goal:** Pre-call microphone permission & audio level check UI, `POST /api/livekit/token` (enforcing `minutesBalance > 0`, max 1 active session per user, `emptyTimeout: 60`, `maxParticipants: 2`), live countdown timer UI (with 1-minute warning before 10-min `DEMO` cutoff), `POST /api/webhooks/livekit` (`WebhookReceiver` signature verified), and `@livekit/agents` worker (`Deepgram Nova-3 -> Gemini Flash -> Deepgram Aura-2`).
-- **Done Gate:** You can complete a live voice mock interview in your browser, watch the countdown, hang up (or hit the cutoff), and verify transcript + minute deduction in Postgres.
+**Decisions: debate, don't gold-plate.** For any design choice, give the simplest option that passes the Done Gate, the strongest argument against Karim's proposal, and a recommendation. Hold a position that's right; change it only for a better reason. A new library, table, service or abstraction must solve a problem we have *now*; otherwise park it in the roadmap backlog. Karim makes the final call.
 
-### Chunk 5: Async HR Grading & Evaluation Report UI
-- **Goal:** Inngest job (`interview/completed`) calling Gemini Structured Outputs rubric grader, saving `HrEvaluation` (or setting `GRADING_FAILED` with a UI retry button), and `shadcn/ui` report page.
-- **Done Gate:** Ending a call automatically grades the transcript in the background and renders the HR level (`Junior`–`Lead`) with per-dimension feedback.
+**Git: Karim runs git; Claude keeps him on track.** Branches: `feat|fix|chore|docs/<scope>-<desc>` off fresh `main`. `main` is protected (PR + green CI).
 
-### Chunk 6: PostHog Observability & HR Beta Launch
-- **Goal:** Instrument the 6 core funnel events (`tenant_created`, `documents_uploaded`, `mic_check_completed`, `interview_started`, `interview_ended`, `grading_completed`) + structured JSON error/call logs (`{ level, event, tenantId, sessionId, roomSid }`) in PostHog.
-- **Done Gate:** All 6 events and server exceptions appear in PostHog during an end-to-end test run; invite first 5–10 real HR testers (feedback gathered in meetings).
+- **Commit small, as you go.** Whenever a step goes green (a test passes, a function is finished, a refactor is complete), Claude says so right away and gives the exact `git add <paths>` + Conventional Commit (`feat(auth): add logout action`). Don't wait for `/ship`.
+- **PRs stay small: one slice, one concern, about ≤ 300 changed lines** (lockfiles and generated files don't count). Claude tells Karim **"time to open a PR"** when the slice's tests pass, and warns early when the branch grows past ~300 lines or starts mixing concerns (feature + refactor, code + tooling), with a suggested split.
+- Tooling and docs changes go in their own `chore/` or `docs/` PR, not inside a feature branch.
 
-## AI Pair-Programming & Learning Mode (STRICT DRIVER / NAVIGATOR)
-The developer is a junior backend engineer building this from scratch to master Next.js, WebRTC voice agents, Postgres concurrency, and production SaaS architecture. **Claude is the Navigator; the developer is the Driver.**
-1. **Orient to the Roadmap First:** At the start of every session or task, state which **Chunk (0–6)** we are in and what the **Done Gate** is.
-2. **Explain the "Why" First:** Before every task, explain the core concept (e.g., JWT capability tokens, Postgres row locks, PgBouncer pooling) in 5–8 concise bullets.
-3. **NO Full Implementation Code:** NEVER write complete service implementations, route handlers, or worker logic unless the developer explicitly says `"I'm stuck, show me a hint"`. Instead, provide ONLY:
-   - TypeScript interfaces & Zod schemas
-   - Prisma schema models
-   - Function signatures with `throw new Error("TODO: implement")`
-   - Failing Vitest unit/integration tests (`tests/unit/*`, `tests/integration/*`)
-4. **Mandatory Git & Branch Guidance on Every Task:**
-   - Whenever starting any new feature, fix, or setup task, ALWAYS tell the developer the exact branch command to run first (e.g., `git checkout -b feat/billing-atomic-deduction`).
-   - Whenever a logical milestone or test suite passes, ALWAYS provide the exact `git add` and Conventional Commit message(s) (`git commit -m "..."`) so the developer builds clean commit history on the go.
-5. **Algorithm Check First:** Ask the developer to explain their step-by-step plan in plain English before they write TypeScript, and critique edge cases early.
-6. **Senior PR Reviewer:** When shown `git diff`, do NOT rewrite their code—list security bugs, missing `tenantId` filters, race conditions, and N+1 queries so the developer fixes them themselves.
+**Workflows (skills):** `/status` where am I? · `/kickoff` start a slice · `/hint` stuck · `/review` review my diff · `/decide` design question · `/ship` checks, commits, PR, roadmap + learning update.
 
-## Design Discussions & Scope Discipline (Debate, Don't Gold-Plate)
-0. **Production habits, MVP scope:** Keep habits that are cheap now but expensive to retrofit later (typed env, migrations, tests, CI, `tenantId` everywhere, atomic updates, clean service boundaries). Cut features and infrastructure that don't serve a 5–10 tester beta. The goal is code that can scale if the idea takes off, without building for scale today.
-1. **Challenge ideas — including the ones in this file:** When the developer proposes a design (or a chunk calls for one), give the strongest argument against it and name the simpler alternative before agreeing. Hold the position when it's right; change it only for a better reason, not because of pushback.
-2. **Simplest thing that passes the Done Gate:** Default to the least machinery that satisfies the Critical Engineering Rules. Label "later" ideas and park them in the backlog instead of building them.
-3. **Justify every new piece:** Before adding a library, table, workflow, service, or abstraction, state the concrete problem it solves *now*. If there isn't one, don't add it.
-4. **Non-negotiables stay:** tenant isolation, server-derived `tenantId`, atomic minute deduction, finalize-once session logic, webhook signature verification, CV/JD prompt-injection containment. Everything else is open to simplification.
-5. **Track it:** Record progress and decisions in `roadmap.md` (progress tracker + decisions log).
+## Stack
 
-## GitHub Workflow, Branching & CI/CD Standards
-- **Branching (Flexible Trunk-Based):**
-  - `main` — Protected production branch (PRs only, passing CI required).
-  - Create small, focused branches for whatever slice you are building—no fixed PR count:
-    - `feat/<scope>-<desc>` (e.g., `feat/auth-invite-onboarding`)
-    - `fix/<scope>-<desc>` (e.g., `fix/webhook-duplicate-event`)
-    - `chore/<scope>-<desc>` (e.g., `chore/ci-push-pr-pipeline`)
-    - `docs/<desc>` (e.g., `docs/product-roadmap`)
-- **Conventional Commits:** `<type>(<scope>): <imperative summary>` (e.g., `feat(billing): add atomic minute deduction`, `test(billing): add concurrent deduction race test`).
-- **GitHub Actions CI (`.github/workflows/ci.yml`):**
-  - **Triggers:** Runs on **every `push`** (all branches) AND **every `pull_request`** targeting `main`.
-  - **Concurrency:** Uses `group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}` with `cancel-in-progress: true` so rapid pushes cancel stale runs.
-  - **Jobs (Chunk 0):** `typecheck` (`npx tsc --noEmit`) -> `lint` (`npm run lint`) -> `test:unit` -> `build` (`npm run build`).
-  - **Added in Chunk 1:** `test:integration` (ephemeral Postgres container + `npx prisma migrate deploy`).
-- **Deployment:**
-  - **Web:** Vercel GitHub integration (preview per branch, production on `main`).
-  - **Migrations (`.github/workflows/deploy.yml`, from Chunk 1):** On push to `main`, run `npx prisma migrate deploy` against Supabase `DIRECT_URL`.
-  - **Worker:** Decided before Chunk 4 (see `roadmap.md` D3).
-- **Supabase Keep-Alive (`.github/workflows/keep-alive.yml`, from Chunk 1):** Scheduled cron every 3 days pinging `/api/health` so Supabase Free Tier never pauses due to 7-day inactivity.
+Next.js App Router (TS strict) on Vercel Hobby · Supabase Postgres + Auth (`@supabase/ssr`) · Prisma `7.10.1` (pinned exactly) · Zod env in `src/env.ts` (imported by `next.config.ts`, so bad env fails the build) · Vitest · Tailwind + shadcn/ui · Inngest · PostHog · LiveKit Cloud + `@livekit/agents` (Deepgram Nova-3 STT → Gemini Flash → Deepgram Aura-2 TTS) · Gemini structured outputs for grading · Node 26 (`engines`) · `tsx` for scripts.
 
-## Architecture & Directory Structure
-Keep core domain logic decoupled from Next.js routing and the LiveKit worker:
-- `docs/PRODUCT_ROADMAP.md` — MVP vs. backlog scope, `DEMO` vs. `PRO` tier rules, and validation metrics.
-- `.github/workflows/` — `ci.yml` (every push + PR), `deploy.yml` (push to `main`), and `keep-alive.yml`.
-- `prisma/` — `schema.prisma`, `prisma.config.ts`, and versioned SQL migrations.
-- `src/env.ts` — Zod-validated environment variables.
-- `src/lib/analytics/` — PostHog client/server wrappers and structured logger (`{ level, event, tenantId, sessionId, roomSid }`).
-- `src/app/` — Next.js pages (Server Components), `/auth/confirm`, Server Actions, and `/api` Route Handlers (`/api/health`, `/api/livekit/token`, `/api/webhooks/livekit`, `/api/inngest`).
-- `src/server/auth/` — `requireAuthContext()` resolving `{ userId, tenantId, role }` from Supabase Auth.
-- `src/server/db/` — Prisma client singleton & transaction helpers.
-- `src/server/services/` — Pure TypeScript services (`onboardingService`, `interviewService`, `billingService`, `documentParserService`, `hrGradingService`).
-- `src/server/prompts/` — XML-delimited candidate persona builder & HR rubric evaluator.
-- `src/worker/` — LiveKit Voice Agent worker (`@livekit/agents`) importing `src/server/services/*` directly.
-- `tests/unit/` & `tests/integration/` — Vitest test suites.
+## Commands
 
-## Critical Engineering Rules
+- `docker compose up -d`: local Postgres 17 on port 5433 (`envision` dev, `envision_test` tests)
+- `npm run dev` (`npm run worker:dev` arrives in Chunk 4)
+- `npx prisma migrate dev --name <name>`: never `db push`. New table → `--create-only`, add `ALTER TABLE "<T>" ENABLE ROW LEVEL SECURITY;`, then apply.
+- Full pre-commit check (same as CI): `npm run format:check && npm run lint && npm run typecheck && npm run test:unit && npm run test:integration && npm run build`
+- `npm run invite:create -- "<who>"`: owner-only invite link (`--yes` for a non-local DB)
 
-### 1. Multi-Tenancy & Data Isolation
-- Every tenant-owned table (`User`, `InterviewSession`, `HrEvaluation`) MUST have `tenantId` indexed via `@@index([tenantId])`.
-- NEVER call `prisma` directly in UI pages, Server Actions, or Route Handlers—always route through `src/server/services/*` requiring an explicit `tenantId`.
-- Resolve `tenantId` exclusively via `requireAuthContext()` on the server; never trust client-supplied `tenantId`.
-- **Platform-level tables** (currently only `Invite`) have no `tenantId` because they exist before any tenant. They are written only by owner tooling (`scripts/`, a future owner admin) and by `onboardTenant`—never readable or writable by tenants.
-- **Every new table gets RLS:** each migration that creates a table must add `ALTER TABLE "<Table>" ENABLE ROW LEVEL SECURITY;` by hand (`migrate dev --create-only`, edit, apply). `tests/integration/rls.test.ts` fails if one is missed.
-- **Owner ≠ tenant `ADMIN`:** tenant `ADMIN` is a customer's role and only ever sees its own tenant. Platform-owner powers (invites, granting minutes, cross-tenant views) must come from a separate owner check, never from `role = ADMIN`.
+## Architecture
 
-### 2. Idempotency, Concurrency & Cost Guardrails
-- **Invite Claims:** A tenant is created only by atomically claiming an unused, unexpired invite (conditional `updateMany` with `count === 1`) in the same `$transaction` as the `Tenant` + `User` inserts. Store only `SHA-256(token)`, never the token.
-- **Session & Room Limits:** `tenant.minutesBalance > 0`, max 1 active (`PENDING`/`IN_PROGRESS`) session per user, `emptyTimeout: 60`, `maxParticipants: 2`, and max call duration enforced (`10 min` for `DEMO`, `45 min` for `PRO`) with a 1-minute UI warning.
-- **Webhook Verification & Idempotency:** Verify LiveKit `WebhookReceiver` signatures. Finalize-once is enforced by the state machine: inside one `$transaction`, the `IN_PROGRESS -> COMPLETED` conditional `updateMany` must return `count === 1` before saving the transcript and deducting minutes. If `count === 0`, the event was already processed — return `200 OK` and do nothing. (No separate idempotency table during MVP.)
-- **Atomic Minute Deduction:** Deduct `minutesBalance` in a single atomic conditional update (`minutesBalance >= cost`) inside `$transaction`—never read-then-write in two queries.
-- **State Machine:** Enforce `PENDING -> IN_PROGRESS -> COMPLETED -> GRADED | GRADING_FAILED` via conditional `updateMany` checks.
+- `src/server/services/*`: pure TS domain logic; every function takes an explicit `tenantId`. Pages, Server Actions and Route Handlers call services, never `prisma` directly.
+- `src/server/auth/`: `getAuthContext()` (tested service) + `requireAuthContext()` (thin `server-only` wrapper) → `{ userId, tenantId, role }` from our DB, never from the token or client.
+- `src/lib/supabase/`: Supabase clients + adapters that turn Supabase responses into our own result types (unit-tested). `src/proxy.ts`: refreshes the session on each request; authorization happens in `requireAuthContext()`, not here.
+- `src/server/db/`: Prisma singleton + transaction helpers. `src/server/prompts/`: candidate persona + rubric.
+- `src/worker/`: LiveKit agent; imports services directly. `src/lib/analytics/`: PostHog + structured logger.
+- `tests/unit/`, `tests/integration/`: integration runs serially against `envision_test` only (harness refuses DB names not ending in `_test`).
 
-### 3. Prompt Safety & Async Grading
-- **Prompt Injection Defense:** Parse PDF/DOCX in-memory (max 5MB, reject if extracted text `< 100` chars) and wrap untrusted CV/JD text in `<candidate_cv>` and `<job_description>` XML tags. Lock the LiveKit agent strictly into the candidate persona (2–4 sentences max per turn).
-- **Async Post-Call Grading:** Persist transcript, deduct minutes, and emit an Inngest event (`interview/completed`) immediately on room close. Never block webhooks on LLM grading.
+## Architecture rules (boundaries and coupling)
 
-## Common Commands
-- `npm run dev` — Start Next.js dev server
-- `npm run worker:dev` — Start local LiveKit Voice Agent worker
-- `npx prisma migrate dev --name <name>` — Create & apply migration
-- `npm run test:unit` / `npm run test:integration` — Run Vitest suites (integration needs `docker compose up -d`)
-- `npm run typecheck` — Route typegen + strict TypeScript check (`next typegen && tsc --noEmit`)
-- `npm run format` / `npm run format:check` — Prettier
-- `npm run invite:create -- "<who it is for>"` — Create a single-use signup invite link (owner only; `--yes` required for a non-local DB)
-- `docker compose up -d` — Start the local Postgres 17 (dev DB `envision`, test DB `envision_test`, port 5433)
+- **Dependencies point inward:** `src/app` (Next.js glue) → `src/server/services` (domain rules) ← `src/lib/<vendor>` adapters. Services never import `next/*`, `@supabase/*`, AI SDKs, LiveKit, Inngest or PostHog. They receive vendor capabilities as injected functions typed by us, the way `signUpWithInvite(fields, { signUp })` does. Route handlers, Server Actions and the worker stay thin: parse input → call a service → map the result.
+- **One adapter per vendor capability** in `src/lib/<vendor>/`. It maps vendor responses into our own result types (`toLogInResult`) and gets unit tests; vendor types never appear in service signatures.
+- **Abstract a vendor only where change is likely or tests need it.** The AI grader sits behind our own `gradeTranscript()` port (Gemini free tier → paid/other is likely). LiveKit and its STT/LLM/TTS plugins are *not* wrapped: the plugins already are the swap point, and the worker is LiveKit-shaped by nature.
+- **Prisma is our DB abstraction.** Services call Prisma directly; no repository layer on top. Postgres features (RLS, conditional updates, constraints) are used on purpose.
+- **No network calls inside a `$transaction`** (Supabase, LLM, HTTP): they hold locks and a pool connection for seconds and can't be rolled back. Call the vendor before or after, and design the order so a failure in between is recoverable.
+- **Known, accepted coupling:** `User.id` = Supabase auth user id. Changing auth provider later = one migration adding an `authProviderId` column.
+- **Migrations once testers have data:** expand → migrate → contract (add nullable, backfill, then enforce/drop in a later deploy). Never rename or drop a column the running code still reads.
+
+## Non-negotiables (each should have a test that fails if broken)
+
+1. Tenant isolation: `tenantId` on every tenant-owned table (`@@index([tenantId])`), derived server-side only. Platform tables (`Invite`) have no `tenantId` and are never tenant-readable.
+2. RLS enabled on every table (`tests/integration/rls.test.ts`); Supabase Data API off.
+3. Owner powers never come from tenant `role = ADMIN`.
+4. Atomic writes: invite claim, state transitions and minute deduction are single conditional `updateMany` calls checked by `count`, inside `$transaction`. Never read-then-write.
+5. Session state machine `PENDING → IN_PROGRESS → COMPLETED → GRADED | GRADING_FAILED`; `count === 0` on `IN_PROGRESS → COMPLETED` means already finalized → return 200, do nothing.
+6. LiveKit webhooks verified with `WebhookReceiver`; grading is async via Inngest, never inside the webhook.
+7. Untrusted CV/JD text only inside `<candidate_cv>` / `<job_description>` tags; agent locked to candidate persona.
+
+## Gotchas we've hit
+
+- Vitest strips types without checking them. Green tests ≠ green `typecheck`. Run the full check before committing.
+- Use `Buffer.toString("base64url")`, not `Uint8Array#toBase64` (runtime has it, TS types don't).
+- npm `latest` for `prisma` is a v8 RC. Keep all Prisma packages on exactly `7.10.1`.
+- Supabase URLs never go in local `.env`; hosted DB only receives `migrate deploy` from CI.
+- Vercel previews are auth-protected: check them in a logged-in browser, not `curl`.
