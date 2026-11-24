@@ -9,8 +9,13 @@ import {
 } from "@/server/services/auth-context-service";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 /**
  * Steps (thin glue — the decisions live in getAuthContext, which is tested):
+ * 0. await connection(): wait for a real request. With Partial Prefetching, Next renders this
+ *    with the user's cookies at PREFETCH time; getClaims() then compares the token's `exp` to
+ *    Date.now(), and a validity answer computed during a prefetch could be reused after the
+ *    token expires. In a Server Action (always a real request) it continues immediately.
  * 1. Create the SERVER Supabase client (createSupabaseServerClient, src/lib/supabase/server.ts).
  * 2. supabase.auth.getClaims() — verifies the token's signature. The user id is claims.sub.
  *    No claims (or an error) → redirect("/login").
@@ -20,6 +25,7 @@ import { redirect } from "next/navigation";
  * redirect comes from "next/navigation".
  */
 export async function requireAuthContext(): Promise<AuthContext> {
+  await connection();
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.auth.getClaims();
   if (error || !data?.claims) {
