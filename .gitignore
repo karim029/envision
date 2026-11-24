@@ -45,3 +45,6 @@ next-env.d.ts
 
 # Vitest report output
 /.vitest/
+
+# Claude Code personal settings (written by /config)
+.claude/settings.local.json
