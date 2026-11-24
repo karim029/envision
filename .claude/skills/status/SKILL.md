@@ -1,6 +1,6 @@
 ---
 name: status
-description: "Where am I?" Reorients Karim when he's lost or resuming work. Reads the branch, commits, uncommitted changes and roadmap, then says what's done, what's left on this branch, and the single next step.
+description: "Where am I? Reorients Karim when he is lost or resuming work. Reads the branch, commits, uncommitted changes and roadmap, then says what is done, what is left on this branch, and the single next step."
 disable-model-invocation: true
 allowed-tools: Bash(git status *) Bash(git diff *) Bash(git log *) Bash(git branch *) Read Grep Glob
 ---
