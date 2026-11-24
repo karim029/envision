@@ -16,11 +16,11 @@ interface LoginFormState {
 
 const initialState: LoginFormState = { result: null, email: "" };
 /**
- * 1. useActionState with logInAction (import it from "./actions"), initial state null.
- * 2. form action + submit button disabled while pending ("Logging in…").
- * 3. Red Alert above the fields with LOG_IN_ERROR_MESSAGES[state.status] when there's an error.
- * 4. Keep the typed email after an error (same problem + same fix as signup: a browser-side
- *    wrapper that remembers it, given back as defaultValue). Never the password.
+ * Login form (client component).
+ * - useActionState runs `submit`, a browser-side wrapper around logInAction that also
+ *   remembers the typed email, so it is given back as defaultValue after an error.
+ *   Never the password.
+ * - The button is disabled while pending; a red Alert shows LOG_IN_ERROR_MESSAGES on failure.
  */
 export function LoginForm() {
   const [state, formAction, pending] = useActionState(submit, initialState);
