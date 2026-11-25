@@ -29,7 +29,7 @@ export function signUpErrorMessage(outcome: SignUpOutcome): string | null {
     case "failed":
       return "Something went wrong. Please try again.";
     case "invite_claimed_meanwhile":
-      return "Your account was created, but this invite was just used by someone else. Ask for a new invite link — you'll enter it after confirming your email.";
+      return "This invite was just used by someone else, so your setup didn't finish. Contact the person who invited you and they'll sort it out.";
     case "check_email":
     case "invalid_input":
       return null;
