@@ -6,28 +6,34 @@ Status: `new` (not done yet) · `practiced` (done once, with help) · `owned` (d
 
 Seeded from the decisions log. Adjust the statuses honestly; only you can promote something to `owned`.
 
-| Concept / pattern                                               | Status    | Evidence (file, PR or commit)             |
-| --------------------------------------------------------------- | --------- | ----------------------------------------- |
-| Zod env validation, fail at build                               | practiced | `src/env.ts`                              |
-| Route Handler (`app/api/*/route.ts`)                            | practiced | `/api/health`, `/auth/confirm`            |
-| Prisma migrations (`migrate dev` / `deploy`), RLS by hand       | practiced | init migration                            |
-| Vitest integration harness (`_test` guard, truncate, serial)    | practiced | `tests/integration/`                      |
-| Interactive `$transaction` + conditional `updateMany` claim     | practiced | `onboardTenant`                           |
-| READ COMMITTED visibility / "on conflict, re-read"              | practiced | `onboardTenant`                           |
-| Supabase SSR auth: `getClaims`, `verifyOtp` + `token_hash`      | practiced | `/auth/confirm`                           |
-| Server Component page (data loaded on the server)               | practiced | `signup/page.tsx` (invite check on load)  |
-| Server Actions + `useActionState` forms                         | practiced | `signup/actions.ts`, `login/actions.ts`   |
-| Proxy (`src/proxy.ts`, formerly middleware) session refresh     | practiced | `src/proxy.ts`, `lib/supabase/proxy.ts`   |
-| Adapter pattern: wrap a vendor SDK, unit-test the mapping       | practiced | `log-in-adapter.ts`, `sign-up-adapter.ts` |
-| Ports & adapters: inject vendor capabilities into services      | practiced | `signUpWithInvite(fields, { signUp })`    |
-| Expand → migrate → contract migrations on live data             | new       | after beta data exists                    |
-| Protected pages (`requireAuthContext` in a layout/page), logout | new       | 1d                                        |
-| Postgres concurrency under load (`Promise.all` races)           | new       | Chunk 2                                   |
-| LiveKit tokens, rooms, webhooks                                 | new       | Chunk 4                                   |
-| Voice agent pipeline (STT → LLM → TTS)                          | new       | Chunk 4                                   |
-| Background jobs / retries (Inngest)                             | new       | Chunk 5                                   |
-| LLM structured outputs                                          | new       | Chunk 5                                   |
+| Concept / pattern                                                        | Status    | Evidence (file, PR or commit)                    |
+| ------------------------------------------------------------------------ | --------- | ------------------------------------------------ |
+| Zod env validation, fail at build                                        | practiced | `src/env.ts`                                     |
+| Route Handler (`app/api/*/route.ts`)                                     | practiced | `/api/health`, `/auth/confirm`                   |
+| Prisma migrations (`migrate dev` / `deploy`), RLS by hand                | practiced | init migration                                   |
+| Vitest integration harness (`_test` guard, truncate, serial)             | practiced | `tests/integration/`                             |
+| Interactive `$transaction` + conditional `updateMany` claim              | practiced | `onboardTenant`                                  |
+| READ COMMITTED visibility / "on conflict, re-read"                       | practiced | `onboardTenant`                                  |
+| Supabase SSR auth: `getClaims`, `verifyOtp` + `token_hash`               | practiced | `/auth/confirm`                                  |
+| Server Component page (data loaded on the server)                        | practiced | `signup/page.tsx` (invite check on load)         |
+| Server Actions + `useActionState` forms                                  | practiced | `signup/actions.ts`, `login/actions.ts`          |
+| Proxy (`src/proxy.ts`, formerly middleware) session refresh              | practiced | `src/proxy.ts`, `lib/supabase/proxy.ts`          |
+| Adapter pattern: wrap a vendor SDK, unit-test the mapping                | practiced | `log-in-adapter.ts`, `sign-up-adapter.ts`        |
+| Ports & adapters: inject vendor capabilities into services               | practiced | `signUpWithInvite(fields, { signUp })`           |
+| Expand → migrate → contract migrations on live data                      | new       | after beta data exists                           |
+| Protected pages (`requireAuthContext` in a page loader), logout          | practiced | `dashboard/page.tsx`, `auth/actions.ts` (PR #14) |
+| Cache Components: `<Suspense>`, `connection()`, prefetch vs request time | practiced | `require-auth-context.ts` (PR #14)               |
+| Tenant-scoped service reads (`id` + `tenantId`, cross-tenant test)       | practiced | `account-service.ts` (PR #14)                    |
+| Postgres concurrency under load (`Promise.all` races)                    | new       | Chunk 2                                          |
+| LiveKit tokens, rooms, webhooks                                          | new       | Chunk 4                                          |
+| Voice agent pipeline (STT → LLM → TTS)                                   | new       | Chunk 4                                          |
+| Background jobs / retries (Inngest)                                      | new       | Chunk 5                                          |
+| LLM structured outputs                                                   | new       | Chunk 5                                          |
 
 ## Teach-back log
 
 Short answers you gave in `/ship`, kept so you can see progress. Newest first.
+
+- 2026-11-24 · 1d login/logout · _Minutes left on the dashboard:_ partly. No new service or query needed (extend the existing Tenant `select` in `getAccountSummary`); the part inside `<Suspense>` runs at request time, only the fallback is prerendered.
+- 2026-11-24 · 1d login/logout · _`global` signOut while Supabase is unreachable:_ right (cookies stay, she's still logged in). Added: she sees `/login` and wrongly believes she's logged out; on a shared computer the next person gets her account.
+- 2026-11-24 · 1d login/logout · _Why filter on `tenantId` too:_ right (tenant isolation). Added: it's defense in depth, harmless while the code is correct, and returns nothing instead of another tenant's data if a future caller passes a mismatched pair.
