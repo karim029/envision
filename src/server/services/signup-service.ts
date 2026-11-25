@@ -53,8 +53,8 @@ export type SignUpOutcome =
   | { status: "rate_limited" }
   | { status: "failed" }
   /** The account WAS created, but someone claimed the invite in between →
-   *  "This invite was just used — ask for a new link; you'll be asked for it after
-   *  confirming your email." (/onboarding handles the rest.) */
+   *  "contact the person who invited you". Fixed by hand during the beta (delete the auth
+   *  user, send a new link); a later login lands on the locked /onboarding page. */
   | { status: "invite_claimed_meanwhile" };
 
 /**
