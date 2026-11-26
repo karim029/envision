@@ -12,7 +12,7 @@ Build strictly in order. A chunk is done when its **Done Gate** passes. Progress
 - **Goal:** Prisma v7 config (`DATABASE_URL` pooler :6543 runtime, `DIRECT_URL` :5432 migrations), init migration (`Tenant`, `User`, `InterviewSession`, `HrEvaluation`, `Invite`), Supabase Auth (`/auth/confirm` via `verifyOtp` + `token_hash`, invite signup, login, password reset), `requireAuthContext()`, atomic `onboardingService`. CI gains `test:integration` (Postgres service + `migrate deploy`); add `deploy.yml` (migrations on push to `main`) and `keep-alive.yml` (ping production `/api/health` every 3 days).
 - **Done Gate:** Integration test: signup with a valid invite creates a `DEMO` tenant (30 min) + `ADMIN` user and marks the invite used; unknown, used and expired invites are rejected; two simultaneous signups on one invite → exactly one succeeds.
 
-## Chunk 2: Atomic billing & finalize-once sessions
+## Chunk 2: Session lifecycle & minute guardrail (finalize-once)
 
 - **Goal:** `billingService`: atomic minute deduction (conditional `updateMany`) and state transitions `PENDING → IN_PROGRESS → COMPLETED → GRADED | GRADING_FAILED`. Repeat finalize calls match 0 rows and deduct nothing.
 - **Open question to settle in `/decide` before coding:** a call may start with `minutesBalance > 0` but run up to 10 min. What happens at finalize if `cost > minutesBalance`? (Options: cap call length at `min(planCap, balance)` when issuing the token; clamp deduction to the balance; or both.) The transcript must never be lost because the deduction failed.

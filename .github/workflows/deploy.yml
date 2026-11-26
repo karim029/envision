@@ -1,0 +1,56 @@
+name: Deploy
+
+# Production deploy, in a fixed order: migrate the database, then deploy the web app.
+# Vercel's automatic deploy for main is off (vercel.json), so this is the only way main
+# reaches production, and new code never goes live before its migration.
+# Runs on every push to main (PRs already passed CI) and can be started by hand.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One migration run at a time, queued, never cancelled:
+# cancelling a run halfway through a migration can leave the database half-migrated.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # DIRECT_URL and VERCEL_DEPLOY_HOOK_URL are secrets of the "production" environment,
+    # so only this job can read them.
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node (version from package.json engines)
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: package.json
+          cache: npm
+
+      # postinstall runs `prisma generate`, which needs no database.
+      - name: Install dependencies
+        run: npm ci
+
+      # The secret is only exposed to the one step that needs it.
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+        env:
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+
+      # Only reached if the migration succeeded (a failed step stops the job).
+      # The hook only queues the Vercel build and returns at once: a failed build shows up
+      # in Vercel (and its email), not here. The old code then stays live on the new schema,
+      # which is why migrations must be additive (expand -> migrate -> contract).
+      - name: Trigger Vercel production deploy
+        run: curl --fail --silent --show-error -X POST "$VERCEL_DEPLOY_HOOK_URL"
+        env:
+          VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
