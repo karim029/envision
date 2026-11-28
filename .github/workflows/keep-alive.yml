@@ -1,0 +1,27 @@
+name: Keep-alive
+
+# Supabase Free pauses a project after 7 days without activity. Every 3 days this calls
+# production /api/health, which runs `SELECT 1` against the database, so the project never
+# reaches 7 idle days. Delete this file when we move to a paid Supabase plan (roadmap backlog).
+# Scheduled runs only start from the default branch, so this begins working once merged to main.
+on:
+  schedule:
+    # 06:00 UTC on day 1, 4, 7, ... of each month. At a month boundary the gap gets shorter, never longer.
+    - cron: "0 6 */3 * *"
+  # Run it by hand from the Actions tab (to test it right after merging).
+  workflow_dispatch:
+
+# Nothing to read or write in the repo: the job only makes one HTTP request.
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      # --fail turns a 503 (database unreachable) into a failed run; GitHub emails you about it.
+      # --retry retries timeouts and 5xx answers 3 times, so a cold start or a short blip doesn't alert.
+      - name: Ping production health check
+        run: curl --fail --silent --show-error --max-time 30 --retry 3 --retry-delay 10 "$HEALTH_URL"
+        env:
+          HEALTH_URL: ${{ vars.PRODUCTION_URL }}/api/health
